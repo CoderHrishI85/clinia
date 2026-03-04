@@ -1,10 +1,13 @@
 from fastapi import FastAPI
+from Backend.app.routes.health import router as health_router
 
 app = FastAPI(
     title="Clinia API",
     description="AI-powered CRM for clinics",
     version="0.1.0"
 )
+
+app.include_router(health_router)
 
 @app.get("/")
 def root():
@@ -13,7 +16,3 @@ def root():
         "version": "0.1.0",
         "status": "healthy"
     }
-
-@app.get("/health")
-def health_check():
-    return {"status": "ok"}
