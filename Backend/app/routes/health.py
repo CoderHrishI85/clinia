@@ -14,6 +14,4 @@ def health_check():
 
 @router.get("/ping")
 def ping():
-    return {
-        "ping": "pong"
-    }
+    return {"ping": "pong"}
