@@ -14,8 +14,7 @@
 ## 🎯 The Problem
 Independent clinic owners in India manage everything manually — WhatsApp for appointments, paper registers for patient history, zero follow-up system.
 
-Enterprise solutions like Practo are expensive and built for hospitals. A solo doctor in Pune does not need a ₹50,000/year platform.
-
+Enterprise solutions like Practo are expensive and built for hospitals. 
 **Clinia fills that gap.**
 
 ## ✨ Features
