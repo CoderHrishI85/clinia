@@ -78,11 +78,6 @@ Building this live in public — daily commits + daily LinkedIn posts.
 
 ## 📄 License
 MIT
-```
-
-`Ctrl+S` karo!
-
----
 
 Phir commit:
 
