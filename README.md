@@ -78,9 +78,3 @@ Building this live in public — daily commits + daily LinkedIn posts.
 
 ## 📄 License
 MIT
-
-Phir commit:
-
-`Ctrl+Shift+G` → Stage → message:
-```
-docs(readme): add comprehensive project overview and setup guide
