@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from Backend.app.routes.health import router as health_router
+from Backend.app.schemas.base import RootResponse
 
 app = FastAPI(
     title="Clinia API",
@@ -9,7 +10,7 @@ app = FastAPI(
 
 app.include_router(health_router)
 
-@app.get("/")
+@app.get("/", response_model=RootResponse)
 def root():
     return {
         "message": "Clinia API is running",
