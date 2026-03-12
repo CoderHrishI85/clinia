@@ -63,8 +63,8 @@ python -m uvicorn Backend.app.main:app --reload
 - [x] FastAPI entry point + health routes
 - [x] Virtual environment + dependencies
 - [x] Branch strategy + conventional commits
-- [ ] JWT Authentication
-- [ ] PostgreSQL + Alembic migrations
+- [x] JWT Authentication
+- [x] PostgreSQL + Alembic migrations
 - [ ] RAG pipeline
 - [ ] Streamlit dashboard
 - [ ] Razorpay payments
