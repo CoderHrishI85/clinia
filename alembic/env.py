@@ -7,6 +7,8 @@ from alembic import context
 from dotenv import load_dotenv
 load_dotenv()
 
+from Backend.app.models import user
+
 from Backend.app.core.database import Base
 from Backend.app.models import patient
 # this is the Alembic Config object, which provides
