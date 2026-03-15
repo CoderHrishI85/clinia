@@ -21,3 +21,15 @@ def create_patient(patient: PatientCreate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(new_patient)
     return new_patient
+
+@router.get("/", )
+def get_all_patients(db: Session = Depends(get_db)):
+    patients = db.query(Patient).all()
+    return patients
+
+@router.get("/{patient_id}")
+def get_patient(patient_id: int, db: Session = Depends(get_db)):
+    patient = db.query(Patient).filter(Patient.id == patient_id).first()
+    if not patient:
+        raise HTTPException(status_code=404, detail="Patient not found")
+    return patient
