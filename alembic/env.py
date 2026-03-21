@@ -9,6 +9,9 @@ load_dotenv()
 
 from Backend.app.models import user
 
+
+from Backend.app.models import appointment
+
 from Backend.app.core.database import Base
 from Backend.app.models import patient
 # this is the Alembic Config object, which provides
