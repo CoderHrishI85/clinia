@@ -50,52 +50,61 @@ def main():
     else:
         tab1, tab2 = st.tabs(["👥 Patients", "📅 Appointments"])
 
-        with tab1:
-            st.subheader("All Patients")
-            patients = get_patients(st.session_state.token)
-            if patients:
-                st.dataframe(patients)
-            else:
-                st.info("No patients yet!")
-
-            st.subheader("Add New Patient")
-            name = st.text_input("Name")
-            phone = st.text_input("Phone")
-            email = st.text_input("Email (optional)")
-            if st.button("Add Patient"):
-                response = add_patient(st.session_state.token, name, phone, email)
-                if response.status_code == 200:
-                    st.success("Patient added!")
+     with tab1:
+    st.subheader("All Patients")
+    patients = get_patients(st.session_state.token)
+    if patients:
+        for p in patients:
+            col1, col2, col3 = st.columns([4, 1, 1])
+            with col1:
+                st.write(f"**{p['name']}** | {p['phone']} | {p.get('email', 'N/A')}")
+            with col2:
+                if st.button("🗑️ Delete", key=f"del_p_{p['id']}"):
+                    headers = {"Authorization": f"Bearer {st.session_state.token}"}
+                    requests.delete(f"{API_URL}/patients/{p['id']}", headers=headers)
                     st.rerun()
-                else:
-                    st.error(response.json().get("detail", "Error!"))
+    else:
+        st.info("No patients yet!")
 
-        with tab2:
-            st.subheader("All Appointments")
-            appointments = get_appointments(st.session_state.token)
-            if appointments:
-                st.dataframe(appointments)
-            else:
-                st.info("No appointments yet!")
-
-            st.subheader("Add New Appointment")
-            patient_id = st.number_input("Patient ID", min_value=1, step=1)
-            doctor_name = st.text_input("Doctor Name")
-            appointment_date = st.date_input("Date")
-            reason = st.text_input("Reason (optional)")
-            if st.button("Add Appointment"):
-                from datetime import datetime
-                dt = datetime.combine(appointment_date, datetime.min.time())
-                response = add_appointment(st.session_state.token, int(patient_id), doctor_name, dt, reason)
-                if response.status_code == 200:
-                    st.success("Appointment added!")
-                    st.rerun()
-                else:
-                    st.error(response.json().get("detail", "Error!"))
-
-        if st.button("Logout"):
-            st.session_state.token = None
+    st.subheader("Add New Patient")
+    name = st.text_input("Name")
+    phone = st.text_input("Phone")
+    email = st.text_input("Email (optional)")
+    if st.button("Add Patient"):
+        response = add_patient(st.session_state.token, name, phone, email)
+        if response.status_code == 200:
+            st.success("Patient added!")
             st.rerun()
+        else:
+            st.error(response.json().get("detail", "Error!"))
 
-if __name__ == "__main__":
-    main()
+       with tab2:
+    st.subheader("All Appointments")
+    appointments = get_appointments(st.session_state.token)
+    if appointments:
+        for a in appointments:
+            col1, col2 = st.columns([5, 1])
+            with col1:
+                st.write(f"**Patient ID: {a['patient_id']}** | Dr. {a['doctor_name']} | {a['appointment_date'][:10]} | {a.get('reason', 'N/A')}")
+            with col2:
+                if st.button("🗑️ Delete", key=f"del_a_{a['id']}"):
+                    headers = {"Authorization": f"Bearer {st.session_state.token}"}
+                    requests.delete(f"{API_URL}/appointments/{a['id']}", headers=headers)
+                    st.rerun()
+    else:
+        st.info("No appointments yet!")
+
+    st.subheader("Add New Appointment")
+    patient_id = st.number_input("Patient ID", min_value=1, step=1)
+    doctor_name = st.text_input("Doctor Name")
+    appointment_date = st.date_input("Date")
+    reason = st.text_input("Reason (optional)")
+    if st.button("Add Appointment"):
+        from datetime import datetime
+        dt = datetime.combine(appointment_date, datetime.min.time())
+        response = add_appointment(st.session_state.token, int(patient_id), doctor_name, dt, reason)
+        if response.status_code == 200:
+            st.success("Appointment added!")
+            st.rerun()
+        else:
+            st.error(response.json().get("detail", "Error!"))

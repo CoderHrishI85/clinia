@@ -32,3 +32,25 @@ def get_appointment(appointment_id: int, db: Session = Depends(get_db), current_
     if not appointment:
         raise HTTPException(status_code=404, detail="Appointment not found")
     return appointment
+
+@router.put("/{appointment_id}", response_model=AppointmentResponse)
+def update_appointment(appointment_id: int, appointment: AppointmentCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    existing = db.query(Appointment).filter(Appointment.id == appointment_id).first()
+    if not existing:
+        raise HTTPException(status_code=404, detail="Appointment not found")
+    existing.patient_id = appointment.patient_id
+    existing.doctor_name = appointment.doctor_name
+    existing.appointment_date = appointment.appointment_date
+    existing.reason = appointment.reason
+    db.commit()
+    db.refresh(existing)
+    return existing
+
+@router.delete("/{appointment_id}")
+def delete_appointment(appointment_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    existing = db.query(Appointment).filter(Appointment.id == appointment_id).first()
+    if not existing:
+        raise HTTPException(status_code=404, detail="Appointment not found")
+    db.delete(existing)
+    db.commit()
+    return {"message": "Appointment deleted successfully"}
