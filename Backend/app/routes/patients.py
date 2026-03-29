@@ -5,54 +5,95 @@ from Backend.app.models.patient import Patient
 from Backend.app.schemas.patient import PatientCreate, PatientResponse
 from Backend.app.core.dependencies import get_current_user
 from Backend.app.models.user import User
+from Backend.app.core.vector_store import index_patient
 
 router = APIRouter(prefix="/patients", tags=["patients"])
 
+
 @router.get("/")
-def get_all_patients(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def get_all_patients(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     patients = db.query(Patient).all()
     return patients
 
+
 @router.post("/", response_model=PatientResponse)
-def create_patient(patient: PatientCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def create_patient(
+    patient: PatientCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     existing = db.query(Patient).filter(Patient.phone == patient.phone).first()
     if existing:
         raise HTTPException(status_code=400, detail="Phone number already registered")
-    
+
     new_patient = Patient(
         name=patient.name,
         phone=patient.phone,
         email=patient.email
     )
+
     db.add(new_patient)
     db.commit()
     db.refresh(new_patient)
+
+    # 🔥 AI INDEXING (MOST IMPORTANT)
+    index_patient(
+        patient_id=new_patient.id,
+        name=new_patient.name,
+        phone=new_patient.phone,
+        email=new_patient.email
+    )
+
     return new_patient
 
+
 @router.get("/{patient_id}")
-def get_patient(patient_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def get_patient(
+    patient_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     patient = db.query(Patient).filter(Patient.id == patient_id).first()
     if not patient:
         raise HTTPException(status_code=404, detail="Patient not found")
     return patient
 
+
 @router.put("/{patient_id}", response_model=PatientResponse)
-def update_patient(patient_id: int, patient: PatientCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def update_patient(
+    patient_id: int,
+    patient: PatientCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     existing = db.query(Patient).filter(Patient.id == patient_id).first()
     if not existing:
         raise HTTPException(status_code=404, detail="Patient not found")
+
     existing.name = patient.name
     existing.phone = patient.phone
     existing.email = patient.email
+
     db.commit()
     db.refresh(existing)
+
     return existing
 
+
 @router.delete("/{patient_id}")
-def delete_patient(patient_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def delete_patient(
+    patient_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     existing = db.query(Patient).filter(Patient.id == patient_id).first()
     if not existing:
         raise HTTPException(status_code=404, detail="Patient not found")
+
     db.delete(existing)
     db.commit()
+
     return {"message": "Patient deleted successfully"}
