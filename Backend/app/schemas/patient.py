@@ -1,18 +1,16 @@
 from pydantic import BaseModel
 from typing import Optional
-from datetime import datetime
 
 class PatientCreate(BaseModel):
     name: str
-    phone: str
-    email: Optional[str] = None
+    contact: str  # Frontend se 'contact' aayega
+    email: Optional[str] = "no-email@clinia.com"
 
 class PatientResponse(BaseModel):
     id: int
     name: str
-    phone: str
-    email: Optional[str]
-    created_at: datetime
+    phone: str # DB mein 'phone' naam se save hai
+    # Age aur Gender yahan se bhi hata diye taaki mismatch na ho
 
     class Config:
         from_attributes = True
