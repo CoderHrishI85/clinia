@@ -1,0 +1,24 @@
+name: Clinia Deploy
+
+on:
+  workflow_dispatch:
+  workflow_run:
+    workflows: ["Clinia CI"]
+    types: [completed]
+
+jobs:
+  deploy-backend:
+    name: Deploy backend webhook
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main')
+    env:
+      DEPLOY_WEBHOOK: ${{ secrets.DEPLOY_WEBHOOK }}
+
+    steps:
+      - name: Trigger backend deploy
+        run: |
+          if [ -z "$DEPLOY_WEBHOOK" ]; then
+            echo "DEPLOY_WEBHOOK is not configured; skipping backend deploy."
+            exit 0
+          fi
+          curl -fsS -X POST "$DEPLOY_WEBHOOK"
