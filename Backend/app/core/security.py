@@ -1,7 +1,7 @@
-import bcrypt
 from datetime import datetime, timedelta, timezone
+import bcrypt
+from fastapi import HTTPException, status
 from jose import JWTError, jwt
-from fastapi import HTTPException
 from Backend.app.core.config import get_settings
 
 settings = get_settings()
@@ -28,7 +28,15 @@ def verify_token(token: str) -> str:
         payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
         email: str = payload.get("sub")
         if email is None:
-            raise HTTPException(status_code=401, detail="Invalid token")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid token",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
         return email
     except JWTError:
-        raise HTTPException(status_code=401, detail="Invalid token")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )

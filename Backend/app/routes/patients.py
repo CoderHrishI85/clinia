@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
+from Backend.app.ai_db import collection
 from Backend.app.core.database import get_db
 from Backend.app.models.patient import Patient
 from Backend.app.schemas.patient import PatientCreate, PatientResponse
@@ -13,6 +14,17 @@ router = APIRouter(prefix="/patients", tags=["patients"])
 
 def _patient_payload(patient: PatientCreate) -> dict:
     return patient.model_dump()
+
+def _patient_search_text(patient: Patient) -> str:
+    parts = [
+        f"Name: {patient.name}",
+        f"Gender: {patient.gender}" if patient.gender else None,
+        f"Age: {patient.age}" if patient.age is not None else None,
+    ]
+    symptoms = getattr(patient, "symptoms", None)
+    if symptoms:
+        parts.append(f"Symptoms: {symptoms}")
+    return ". ".join(part for part in parts if part)
 
 def _raise_if_patient_conflict(db: Session, patient: PatientCreate, patient_id: int | None = None) -> None:
     filters = [Patient.phone == patient.phone]
@@ -46,6 +58,10 @@ def create_patient(patient: PatientCreate, db: Session = Depends(get_db), curren
         db.rollback()
         raise HTTPException(status_code=400, detail="Patient phone or email already exists")
     db.refresh(new_patient)
+    collection.add(
+        documents=[_patient_search_text(new_patient)],
+        ids=[str(new_patient.id)],
+    )
     return new_patient
 
 @router.get("/{patient_id}", response_model=PatientResponse)

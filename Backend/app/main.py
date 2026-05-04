@@ -4,6 +4,7 @@ from Backend.app.routes.health import router as health_router
 from Backend.app.routes.patients import router as patients_router
 from Backend.app.routes.auth import router as auth_router
 from Backend.app.routes.appointment import router as appointments_router
+from Backend.app.routes.search import router as search_router
 from Backend.app.schemas.base import RootResponse
 from Backend.app.core.config import get_settings
 
@@ -27,6 +28,7 @@ app.include_router(health_router)
 app.include_router(patients_router)
 app.include_router(auth_router)
 app.include_router(appointments_router)
+app.include_router(search_router)
 
 @app.get("/", response_model=RootResponse)
 def root():

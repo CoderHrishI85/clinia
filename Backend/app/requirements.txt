@@ -1,2 +1,5 @@
 fastapi==0.104.1
+chromadb
+python-multipart==0.0.21
+sentence-transformers
 uvicorn==0.24.0
