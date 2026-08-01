@@ -1,254 +1,402 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { ApiError, createPatient, deletePatient, getPatients } from "@/lib/api";
+import { useMemo, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Check, ClipboardCopy, Pencil, Plus, Search, Sparkles, Trash2, UserRound } from "lucide-react";
+import { toast } from "sonner";
+import AppShell from "@/components/app-shell";
+import { PageHeader } from "@/components/ui/page-header";
+import { Card, CardBody } from "@/components/ui/card";
+import { DataTable, Pagination, type Column } from "@/components/ui/table";
+import { TableSkeleton } from "@/components/ui/skeleton";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input, Textarea } from "@/components/ui/field";
+import { Modal, ConfirmDialog } from "@/components/ui/modal";
+import { Drawer } from "@/components/ui/drawer";
+import { PatientForm } from "@/components/patient-form";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Avatar } from "@/components/ui/avatar";
+import { listPatients, updatePatient, deletePatient, type Patient } from "@/lib/api/patients";
+import { generateSOAPNotes, type SOAPResult } from "@/lib/api/ai";
+import { ApiError } from "@/lib/api/client";
 
-interface Patient {
-  id: number;
-  name: string;
-  phone: string;
-  email?: string | null;
-  age?: number | null;
-  gender?: string | null;
-  created_at: string;
-}
-
-type PatientForm = {
-  name: string;
-  phone: string;
-  email: string;
-  age: string;
-  gender: string;
-};
-
-const emptyForm: PatientForm = {
-  name: "",
-  phone: "",
-  email: "",
-  age: "",
-  gender: "",
-};
-
-const getErrorMessage = (error: unknown) => {
-  if (error instanceof ApiError) return error.message;
-  if (error instanceof Error) return error.message;
-  return "Something went wrong";
-};
+const PAGE_SIZE = 10;
 
 export default function PatientsPage() {
-  const [patients, setPatients] = useState<Patient[]>([]);
-  const [showModal, setShowModal] = useState(false);
-  const [form, setForm] = useState<PatientForm>(emptyForm);
-  const [error, setError] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
+  const qc = useQueryClient();
+  const [page, setPage] = useState(1);
+  const [q, setQ] = useState("");
+  const [createOpen, setCreateOpen] = useState(false);
+  const [selected, setSelected] = useState<Patient | null>(null);
+  const [editOpen, setEditOpen] = useState(false);
+  const [soapOpen, setSoapOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<Patient | null>(null);
 
-  useEffect(() => {
-    loadPatients();
-  }, []);
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ["patients", page],
+    queryFn: () => listPatients({ skip: (page - 1) * PAGE_SIZE, limit: PAGE_SIZE }),
+  });
 
-  const loadPatients = async () => {
-    setIsLoading(true);
-    setError("");
+  const rows = useMemo(() => {
+    if (!data) return [];
+    const needle = q.trim().toLowerCase();
+    if (!needle) return data;
+    return data.filter(
+      (p) =>
+        p.name.toLowerCase().includes(needle) ||
+        p.phone.includes(needle) ||
+        (p.email ?? "").toLowerCase().includes(needle)
+    );
+  }, [data, q]);
+
+  const deleteMutation = useMutation({
+    mutationFn: () => deletePatient(deleteTarget!.id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["patients"] });
+      toast.success("Patient removed");
+      setDeleteTarget(null);
+      if (selected && deleteTarget && selected.id === deleteTarget.id) setSelected(null);
+    },
+    onError: (err) => toast.error(err instanceof ApiError ? err.message : "Delete failed"),
+  });
+
+  const columns: Column<Patient>[] = [
+    {
+      key: "name",
+      header: "Patient",
+      render: (p) => (
+        <div className="flex items-center gap-3">
+          <Avatar name={p.name} />
+          <div>
+            <p className="font-semibold">{p.name}</p>
+            {p.email && <p className="text-xs text-[var(--text-muted)]">{p.email}</p>}
+          </div>
+        </div>
+      ),
+    },
+    { key: "phone", header: "Phone", render: (p) => <span className="tabular-nums">{p.phone}</span> },
+    {
+      key: "age",
+      header: "Details",
+      render: (p) => (
+        <span className="text-[var(--text-secondary)]">
+          {p.gender ? <span className="capitalize">{p.gender}</span> : "—"}
+          {p.age ? ` · ${p.age} yrs` : ""}
+        </span>
+      ),
+    },
+    {
+      key: "history",
+      header: "Medical history",
+      render: (p) => (
+        <span className="line-clamp-1 max-w-56 text-[var(--text-secondary)]">
+          {p.medical_history ?? "—"}
+        </span>
+      ),
+    },
+    {
+      key: "actions",
+      header: "",
+      className: "w-24 text-right",
+      render: (p) => (
+        <div className="flex justify-end gap-1">
+          <button
+            aria-label="Edit patient"
+            onClick={(e) => {
+              e.stopPropagation();
+              setSelected(p);
+              setEditOpen(true);
+            }}
+            className="rounded-lg p-2 text-[var(--text-muted)] transition hover:bg-[var(--surface-2)] hover:text-[var(--text-primary)]"
+          >
+            <Pencil className="size-4" />
+          </button>
+          <button
+            aria-label="Delete patient"
+            onClick={(e) => {
+              e.stopPropagation();
+              setDeleteTarget(p);
+            }}
+            className="rounded-lg p-2 text-[var(--text-muted)] transition hover:bg-[var(--danger-soft)] hover:text-[var(--danger)]"
+          >
+            <Trash2 className="size-4" />
+          </button>
+        </div>
+      ),
+    },
+  ];
+
+  return (
+    <AppShell>
+      <PageHeader
+        eyebrow="Directory"
+        title="Patients"
+        description="Everyone in your clinic, with encrypted medical history."
+        action={
+          <Button onClick={() => setCreateOpen(true)}>
+            <Plus className="size-4" /> New patient
+          </Button>
+        }
+      />
+
+      <div className="mt-8 grid gap-4">
+        <div className="relative max-w-sm">
+          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[var(--text-muted)]" />
+          <Input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Filter by name, phone or email…"
+            className="pl-9"
+          />
+        </div>
+
+        {isLoading ? (
+          <TableSkeleton rows={8} cols={4} />
+        ) : isError ? (
+          <Card>
+            <CardBody className="text-sm text-[var(--text-secondary)]">
+              Unable to load patients. Check that the API is running.
+            </CardBody>
+          </Card>
+        ) : rows.length === 0 && !q ? (
+          <EmptyState
+            icon={<UserRound className="size-10" />}
+            title="No patients yet"
+            description="Start by registering your first patient."
+            action={
+              <Button onClick={() => setCreateOpen(true)}>
+                <Plus className="size-4" /> New patient
+              </Button>
+            }
+          />
+        ) : (
+          <DataTable columns={columns} rows={rows} onRowClick={(p) => setSelected(p)} />
+        )}
+
+        {data && (
+          <Pagination
+            page={page}
+            pageSize={PAGE_SIZE}
+            total={rows.length}
+            onPage={setPage}
+          />
+        )}
+      </div>
+
+      {/* Create modal */}
+      <Modal
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        title="New patient"
+        description="Medical history is encrypted before it touches the database."
+      >
+        <PatientForm onDone={() => setCreateOpen(false)} />
+      </Modal>
+
+      {/* Detail drawer */}
+      <Drawer
+        open={Boolean(selected)}
+        onClose={() => {
+          setSelected(null);
+          setEditOpen(false);
+        }}
+        title={selected?.name ?? ""}
+        description={selected?.email ?? "No email on file"}
+        footer={
+          <>
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setSelected(null);
+                setEditOpen(false);
+              }}
+            >
+              Close
+            </Button>
+            <Button variant="secondary" onClick={() => setEditOpen((v) => !v)}>
+              <Pencil className="size-4" /> {editOpen ? "View" : "Edit"}
+            </Button>
+          </>
+        }
+      >
+        {selected &&
+          (editOpen ? (
+            <PatientForm patient={selected} onDone={() => setEditOpen(false)} />
+          ) : (
+            <dl className="grid gap-4 text-sm">
+              <Detail label="Phone" value={selected.phone} />
+              <Detail
+                label="Age / Gender"
+                value={
+                  [selected.gender && <span key="g" className="capitalize">{selected.gender}</span>, selected.age && <span key="a">{selected.age} yrs</span>]
+                    .filter(Boolean)
+                    .join(" · ") || "—"
+                }
+              />
+              <Detail label="Medical history" value={selected.medical_history ?? "—"} />
+              <Detail label="Notes" value={selected.notes ?? "—"} />
+              <Detail
+                label="Registered"
+                value={new Date(selected.created_at).toLocaleDateString(undefined, {
+                  dateStyle: "medium",
+                })}
+              />
+              <div className="mt-2">
+                <Badge tone="accent">Encrypted PHI</Badge>
+              </div>
+              <div className="mt-2">
+                <Button variant="secondary" onClick={() => setSoapOpen(true)} className="w-full">
+                  <Sparkles className="size-4 text-[var(--accent)]" /> Auto-generate SOAP notes
+                </Button>
+              </div>
+            </dl>
+          ))}
+      </Drawer>
+
+      {/* Delete confirm */}
+      <ConfirmDialog
+        open={Boolean(deleteTarget)}
+        onClose={() => setDeleteTarget(null)}
+        title="Remove patient?"
+        description={`${deleteTarget?.name} will be soft-deleted and hidden from the directory. This can be reversed by an administrator.`}
+        confirmLabel="Remove"
+        loading={deleteMutation.isPending}
+        onConfirm={() => deleteMutation.mutate()}
+      />
+
+      {selected && (
+        <SOAPScribeModal
+          open={soapOpen}
+          patient={selected}
+          onClose={() => setSoapOpen(false)}
+        />
+      )}
+    </AppShell>
+  );
+}
+
+function SOAPSection({ title, items }: { title: string; items: string[] }) {
+  return (
+    <div>
+      <p className="text-xs font-bold uppercase tracking-wider text-[var(--accent)]">{title}</p>
+      {items.length ? (
+        <ul className="mt-1 list-disc space-y-0.5 pl-4 text-sm text-[var(--text-secondary)]">
+          {items.map((item, i) => (
+            <li key={i}>{item}</li>
+          ))}
+        </ul>
+      ) : (
+        <p className="mt-1 text-sm text-[var(--text-muted)]">—</p>
+      )}
+    </div>
+  );
+}
+
+function soapToText(result: SOAPResult): string {
+  const { subjective, objective, assessment, plan } = result.sections;
+  return [
+    "S: " + subjective.join(" "),
+    "O: " + objective.join(" "),
+    "A: " + assessment.join(" "),
+    "P: " + plan.join(" "),
+  ].join("\n");
+}
+
+function SOAPScribeModal({
+  open,
+  patient,
+  onClose,
+}: {
+  open: boolean;
+  patient: Patient;
+  onClose: () => void;
+}) {
+  const qc = useQueryClient();
+  const initial = [patient.medical_history, patient.notes].filter(Boolean).join("\n") || "";
+  const [raw, setRaw] = useState(initial);
+  const [result, setResult] = useState<SOAPResult | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  const generate = useMutation({
+    mutationFn: () => generateSOAPNotes(raw, patient.id),
+    onSuccess: (data) => setResult(data),
+    onError: (err) => toast.error(err instanceof ApiError ? err.message : "Generation failed"),
+  });
+
+  const save = useMutation({
+    mutationFn: () =>
+      updatePatient(patient.id, { ...patient, medical_history: undefined, notes: soapToText(result!) }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["patients"] });
+      toast.success("SOAP notes saved to patient record");
+      onClose();
+    },
+    onError: (err) => toast.error(err instanceof ApiError ? err.message : "Save failed"),
+  });
+
+  const copy = async () => {
+    if (!result) return;
     try {
-      const data = await getPatients();
-      if (Array.isArray(data)) setPatients(data);
-    } catch (err) {
-      setError(getErrorMessage(err));
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleAdd = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setError("");
-
-    const name = form.name.trim();
-    const phone = form.phone.trim();
-    const email = form.email.trim();
-    const gender = form.gender.trim();
-    const age = form.age.trim() ? Number(form.age) : null;
-
-    if (!name || !phone) {
-      setError("Name and phone are required");
-      return;
-    }
-
-    if (age !== null && (!Number.isInteger(age) || age < 0 || age > 130)) {
-      setError("Age must be a valid number between 0 and 130");
-      return;
-    }
-
-    setIsSaving(true);
-    try {
-      await createPatient({
-        name,
-        phone,
-        email: email || null,
-        age,
-        gender: gender || null,
-      });
-      setShowModal(false);
-      setForm(emptyForm);
-      await loadPatients();
-    } catch (err) {
-      setError(getErrorMessage(err));
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const handleDelete = async (id: number) => {
-    setError("");
-    try {
-      await deletePatient(id);
-      await loadPatients();
-    } catch (err) {
-      setError(getErrorMessage(err));
+      await navigator.clipboard.writeText(soapToText(result));
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      toast.error("Clipboard unavailable");
     }
   };
 
   return (
-    <div className="p-8 min-h-screen bg-gray-950 text-white">
-      <div className="flex justify-between items-center mb-8">
-        <h1 className="text-3xl font-bold text-white">Patient Directory</h1>
-        <button
-          onClick={() => {
-            setError("");
-            setShowModal(true);
-          }}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium transition"
-        >
-          + Add Patient
-        </button>
-      </div>
-
-      {error && !showModal && (
-        <div className="mb-6 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">
-          {error}
+    <Modal
+      open={open}
+      onClose={onClose}
+      title="AI medical scribe"
+      description="Structures raw notes into SOAP. You can edit the notes before generating."
+    >
+      {!result ? (
+        <div className="grid gap-4">
+          <Textarea
+            value={raw}
+            onChange={(e) => setRaw(e.target.value)}
+            rows={7}
+            placeholder="Paste or type the doctor's raw notes / symptoms…"
+          />
+          <Button onClick={() => generate.mutate()} loading={generate.isPending} disabled={!raw.trim()}>
+            <Sparkles className="size-4" /> Generate SOAP notes
+          </Button>
+        </div>
+      ) : (
+        <div className="grid gap-4">
+          <div className="grid gap-3 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface-2)] p-4">
+            <SOAPSection title="Subjective" items={result.sections.subjective} />
+            <SOAPSection title="Objective" items={result.sections.objective} />
+            <SOAPSection title="Assessment" items={result.sections.assessment} />
+            <SOAPSection title="Plan" items={result.sections.plan} />
+          </div>
+          <p className="text-center text-xs text-[var(--text-muted)]">{result.summary}</p>
+          <div className="flex gap-2">
+            <Button variant="secondary" className="flex-1" onClick={() => setResult(null)}>
+              Edit notes
+            </Button>
+            <Button variant="secondary" onClick={copy}>
+              {copied ? <Check className="size-4" /> : <ClipboardCopy className="size-4" />}
+              {copied ? "Copied" : "Copy"}
+            </Button>
+            <Button className="flex-1" onClick={() => save.mutate()} loading={save.isPending}>
+              Save to patient
+            </Button>
+          </div>
         </div>
       )}
+    </Modal>
+  );
+}
 
-      <div className="grid gap-4">
-        <AnimatePresence>
-          {patients.map((p) => (
-            <motion.div
-              key={p.id}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, x: -20 }}
-              className="bg-gray-900 border border-gray-800 rounded-xl p-5 flex justify-between items-center"
-            >
-              <div>
-                <p className="text-lg font-semibold">{p.name}</p>
-                <p className="text-gray-400 text-sm">{p.phone} - {p.email || "No email"}</p>
-                <p className="text-gray-500 text-sm">
-                  {p.age !== null && p.age !== undefined ? `${p.age} yrs` : "Age N/A"} - {p.gender || "Gender N/A"}
-                </p>
-              </div>
-              <button
-                onClick={() => handleDelete(p.id)}
-                className="text-red-500 hover:text-red-400 text-sm font-medium"
-              >
-                Delete
-              </button>
-            </motion.div>
-          ))}
-        </AnimatePresence>
-
-        {!isLoading && patients.length === 0 && (
-          <div className="rounded-xl border border-dashed border-gray-800 bg-gray-900/60 p-10 text-center text-gray-400">
-            No patients yet. Add the first patient to start building the clinic CRM.
-          </div>
-        )}
-
-        {isLoading && (
-          <div className="rounded-xl border border-gray-800 bg-gray-900/60 p-10 text-center text-gray-400">
-            Loading patients...
-          </div>
-        )}
-      </div>
-
-      {showModal && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
-          <motion.div
-            initial={{ scale: 0.9, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            className="bg-gray-900 border border-gray-700 rounded-2xl p-8 w-full max-w-md"
-          >
-            <h2 className="text-xl font-bold mb-6">Add New Patient</h2>
-            {error && (
-              <div className="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">
-                {error}
-              </div>
-            )}
-            <form onSubmit={handleAdd}>
-              <input
-                required
-                placeholder="Name"
-                value={form.name}
-                onChange={(e) => setForm({ ...form, name: e.target.value })}
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 mb-4 text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
-              />
-              <input
-                required
-                placeholder="Phone"
-                value={form.phone}
-                onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 mb-4 text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
-              />
-              <input
-                type="email"
-                placeholder="Email"
-                value={form.email}
-                onChange={(e) => setForm({ ...form, email: e.target.value })}
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 mb-4 text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
-              />
-              <input
-                min="0"
-                max="130"
-                type="number"
-                placeholder="Age"
-                value={form.age}
-                onChange={(e) => setForm({ ...form, age: e.target.value })}
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 mb-4 text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
-              />
-              <select
-                value={form.gender}
-                onChange={(e) => setForm({ ...form, gender: e.target.value })}
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 mb-6 text-white focus:outline-none focus:border-blue-500"
-              >
-                <option value="">Select Gender</option>
-                <option value="Male">Male</option>
-                <option value="Female">Female</option>
-                <option value="Other">Other</option>
-              </select>
-              <div className="flex gap-3">
-                <button
-                  disabled={isSaving}
-                  type="submit"
-                  className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60 text-white py-3 rounded-lg font-medium transition"
-                >
-                  {isSaving ? "Saving..." : "Add Patient"}
-                </button>
-                <button
-                  disabled={isSaving}
-                  type="button"
-                  onClick={() => {
-                    setError("");
-                    setShowModal(false);
-                  }}
-                  className="flex-1 bg-gray-800 hover:bg-gray-700 disabled:cursor-not-allowed disabled:opacity-60 text-white py-3 rounded-lg font-medium transition"
-                >
-                  Cancel
-                </button>
-              </div>
-            </form>
-          </motion.div>
-        </div>
-      )}
+function Detail({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="grid gap-1">
+      <dt className="eyebrow">{label}</dt>
+      <dd className="text-[var(--text-primary)]">{value}</dd>
     </div>
   );
 }

@@ -1,26 +1,161 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  color-scheme: light;
+
+  /* surfaces */
+  --background: #f4f7fb;
+  --surface-1: #ffffff;
+  --surface-2: #eef2f9;
+  --surface-3: #e3eaf4;
+  --border: rgba(15, 23, 42, 0.1);
+  --border-strong: rgba(15, 23, 42, 0.2);
+
+  /* text */
+  --text-primary: #0f1728;
+  --text-secondary: #4b5a72;
+  --text-muted: #8a97ac;
+
+  /* brand */
+  --accent: #0e9f6e;
+  --accent-strong: #057a55;
+  --accent-soft: rgba(14, 159, 110, 0.12);
+  --on-accent: #ffffff;
+
+  /* semantic */
+  --success: #0e9f6e;
+  --success-soft: rgba(14, 159, 110, 0.12);
+  --warning: #b45309;
+  --warning-soft: rgba(180, 83, 9, 0.12);
+  --danger: #d92d42;
+  --danger-soft: rgba(217, 45, 66, 0.12);
+  --on-danger: #ffffff;
+  --info: #2563eb;
+  --info-soft: rgba(37, 99, 235, 0.12);
+
+  /* radius */
+  --radius-sm: 0.5rem;
+  --radius: 0.75rem;
+  --radius-lg: 1.25rem;
+  --radius-xl: 1.75rem;
+
+  /* elevation */
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.08);
+  --shadow: 0 12px 40px rgba(15, 23, 42, 0.1);
+  --shadow-lg: 0 24px 70px rgba(15, 23, 42, 0.16);
+
+  /* typography */
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-display: var(--font-display-var), ui-sans-serif, system-ui, sans-serif;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  /* surfaces */
+  --background: #070a0f;
+  --surface-1: #0d121b;
+  --surface-2: #141b27;
+  --surface-3: #1c2534;
+  --border: rgba(191, 209, 235, 0.14);
+  --border-strong: rgba(191, 209, 235, 0.28);
+
+  /* text */
+  --text-primary: #f4f7fb;
+  --text-secondary: #9aa8be;
+  --text-muted: #6b7a92;
+
+  /* brand */
+  --accent: #97f4d0;
+  --accent-strong: #46cfa2;
+  --accent-soft: rgba(151, 244, 208, 0.12);
+  --on-accent: #07110e;
+
+  /* semantic */
+  --success: #7ce1a9;
+  --success-soft: rgba(124, 225, 169, 0.12);
+  --warning: #ffcb70;
+  --warning-soft: rgba(255, 203, 112, 0.12);
+  --danger: #ff8b98;
+  --danger-soft: rgba(255, 139, 152, 0.12);
+  --on-danger: #2b0a0e;
+  --info: #8fb3ff;
+  --info-soft: rgba(143, 179, 255, 0.12);
+
+  /* radius */
+  --radius-sm: 0.5rem;
+  --radius: 0.75rem;
+  --radius-lg: 1.25rem;
+  --radius-xl: 1.75rem;
+
+  /* elevation */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+  --shadow-lg: 0 24px 70px rgba(0, 0, 0, 0.5);
+
+  /* typography */
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-display: var(--font-display-var), ui-sans-serif, system-ui, sans-serif;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+* {
+  border-color: var(--border);
 }
-
+html {
+  scroll-behavior: smooth;
+}
 body {
   background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+button,
+a,
+input,
+select,
+textarea {
+  -webkit-tap-highlight-color: transparent;
+}
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+/* legacy layout helpers (used by landing page) */
+.page-grid {
+  background-image: linear-gradient(rgba(151, 244, 208, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(151, 244, 208, 0.035) 1px, transparent 1px);
+  background-size: 56px 56px;
+}
+.glass {
+  background: var(--surface-1);
+  backdrop-filter: blur(18px);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+}
+.eyebrow {
+  color: var(--accent);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+.muted {
+  color: var(--text-secondary);
+}
+
+.font-display {
+  font-family: var(--font-display);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
 }

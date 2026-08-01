@@ -8,7 +8,8 @@ from sqlalchemy.orm import Session
 
 from Backend.app.ai_db import collection
 from Backend.app.core.database import get_db
-from Backend.app.core.dependencies import get_current_user
+from Backend.app.core.dependencies import get_current_clinic, get_current_user
+from Backend.app.core.phi import decrypt_patient
 from Backend.app.models.patient import Patient
 from Backend.app.models.user import User
 from Backend.app.schemas.patient import PatientResponse
@@ -34,6 +35,10 @@ class PatientSearchResult(BaseModel):
     distance: float | None = Field(
         default=None,
         description="Raw vector distance returned by ChromaDB. Lower is more similar.",
+    )
+    match_reasons: list[str] = Field(
+        default_factory=list,
+        description="Human-readable explanations of why the patient matched the query.",
     )
 
 
@@ -119,12 +124,24 @@ def _query_patient_vectors(
     return patient_ids, distances_by_patient_id, has_more
 
 
-def _load_patients_by_rank(db: Session, patient_ids: list[int]) -> list[Patient]:
+def _load_patients_by_rank(
+    db: Session,
+    patient_ids: list[int],
+    clinic_id: int,
+) -> list[Patient]:
     if not patient_ids:
         return []
 
     try:
-        patients = db.query(Patient).filter(Patient.id.in_(patient_ids)).all()
+        patients = (
+            db.query(Patient)
+            .filter(
+                Patient.id.in_(patient_ids),
+                Patient.clinic_id == clinic_id,
+                Patient.is_deleted == False,
+            )
+            .all()
+        )
     except SQLAlchemyError as exc:
         logger.exception("PostgreSQL patient lookup failed during semantic search")
         raise HTTPException(
@@ -134,10 +151,40 @@ def _load_patients_by_rank(db: Session, patient_ids: list[int]) -> list[Patient]
 
     patients_by_id = {patient.id: patient for patient in patients}
     return [
-        patients_by_id[patient_id]
+        decrypt_patient(patients_by_id[patient_id])
         for patient_id in patient_ids
         if patient_id in patients_by_id
     ]
+
+
+def _build_match_reasons(query: str, patient: Patient) -> list[str]:
+    """Explain why a patient matched — token overlap with record fields."""
+    reasons: list[str] = []
+    query_tokens = [token for token in query.lower().split() if token]
+
+    name = patient.name or ""
+    if any(token in name.lower() for token in query_tokens):
+        reasons.append("name matches")
+
+    if patient.phone and any(token.isdigit() and token in patient.phone for token in query_tokens):
+        reasons.append("phone matches")
+
+    for field, label in (
+        (patient.medical_history, "medical history"),
+        (patient.notes, "notes"),
+    ):
+        if field:
+            lowered = field.lower()
+            matched = next((token for token in query_tokens if len(token) > 2 and token in lowered), None)
+            if matched:
+                reasons.append(f"{label} mentions '{matched}'")
+
+    if patient.gender and any(token == patient.gender.lower() for token in query_tokens):
+        reasons.append("gender matches")
+    if patient.age is not None and any(token == str(patient.age) for token in query_tokens):
+        reasons.append("age matches")
+
+    return reasons[:3]
 
 
 def _build_search_response(
@@ -156,6 +203,7 @@ def _build_search_response(
                 distances_by_patient_id.get(patient.id)
             ),
             distance=distances_by_patient_id.get(patient.id),
+            match_reasons=_build_match_reasons(query, patient),
         )
         for patient in patients
     ]
@@ -178,6 +226,7 @@ def search_patients(
     offset: int = Query(default=0, ge=0),
     limit: int = Query(default=DEFAULT_SEARCH_LIMIT, ge=1, le=MAX_SEARCH_LIMIT),
     db: Session = Depends(get_db),
+    clinic_id: int = Depends(get_current_clinic),
     current_user: User = Depends(get_current_user),
 ) -> PatientSearchResponse:
     _ = current_user
@@ -187,7 +236,7 @@ def search_patients(
         offset=offset,
         limit=limit,
     )
-    patients = _load_patients_by_rank(db, patient_ids)
+    patients = _load_patients_by_rank(db, patient_ids, clinic_id)
 
     return _build_search_response(
         query=normalized_query,

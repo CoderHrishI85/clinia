@@ -28,6 +28,8 @@ class PatientBase(BaseModel):
     email: Optional[str] = Field(default=None, max_length=255)
     age: Optional[int] = Field(default=None, ge=0, le=130)
     gender: Optional[str] = Field(default=None, max_length=40)
+    medical_history: Optional[str] = Field(default=None, max_length=20000)
+    notes: Optional[str] = Field(default=None, max_length=20000)
 
     @field_validator("name", "phone", "email", "gender", mode="before")
     @classmethod
@@ -55,6 +57,8 @@ class PatientUpdate(BaseModel):
     email: Optional[str] = Field(default=None, max_length=255)
     age: Optional[int] = Field(default=None, ge=0, le=130)
     gender: Optional[str] = Field(default=None, max_length=40)
+    medical_history: Optional[str] = Field(default=None, max_length=20000)
+    notes: Optional[str] = Field(default=None, max_length=20000)
 
     @field_validator("name", "phone", "email", "gender", mode="before")
     @classmethod
@@ -74,6 +78,8 @@ class PatientResponse(BaseModel):
     email: Optional[str] = None
     age: Optional[int] = None
     gender: Optional[str] = None
+    medical_history: Optional[str] = None
+    notes: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 

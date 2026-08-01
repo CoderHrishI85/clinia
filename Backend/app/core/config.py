@@ -21,6 +21,9 @@ class Settings:
         self.access_token_expire_minutes = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
         self.allowed_origins = self._list("ALLOWED_ORIGINS", ["http://localhost:3000"])
         self.environment = os.getenv("ENVIRONMENT", "development")
+        self.redis_url = os.getenv("REDIS_URL")
+        self.phi_encryption_key = os.getenv("PHI_ENCRYPTION_KEY")
+        self.openai_api_key = os.getenv("OPENAI_API_KEY")
 
     @staticmethod
     def _required(name: str) -> str:

@@ -6,8 +6,13 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from Backend.app.ai_db import collection
-from Backend.app.core.dependencies import get_current_user
+from Backend.app.core.dependencies import (
+    get_current_clinic,
+    get_current_user,
+    require_role,
+)
 from Backend.app.core.database import get_db
+from Backend.app.core.phi import decrypt_patient, encrypt_payload
 from Backend.app.models.patient import Patient
 from Backend.app.models.user import User
 from Backend.app.schemas.patient import (
@@ -28,8 +33,16 @@ def _update_payload(patient: PatientUpdate) -> dict[str, Any]:
     return patient.model_dump(exclude_unset=True, exclude_none=True)
 
 
-def _get_patient_or_404(db: Session, patient_id: int) -> Patient:
-    patient = db.query(Patient).filter(Patient.id == patient_id).first()
+def _get_patient_or_404(db: Session, patient_id: int, clinic_id: int) -> Patient:
+    patient = (
+        db.query(Patient)
+        .filter(
+            Patient.id == patient_id,
+            Patient.clinic_id == clinic_id,
+            Patient.is_deleted == False,
+        )
+        .first()
+    )
     if not patient:
         raise HTTPException(status_code=404, detail="Patient not found")
     return patient
@@ -60,6 +73,7 @@ def _delete_patient_search(patient_id: int) -> None:
 def _raise_if_patient_conflict(
     db: Session,
     payload: dict[str, Any],
+    clinic_id: int,
     patient_id: int | None = None,
 ) -> None:
     filters = []
@@ -71,7 +85,11 @@ def _raise_if_patient_conflict(
     if not filters:
         return
 
-    query = db.query(Patient).filter(or_(*filters))
+    query = db.query(Patient).filter(
+        or_(*filters),
+        Patient.clinic_id == clinic_id,
+        Patient.is_deleted == False,
+    )
     if patient_id is not None:
         query = query.filter(Patient.id != patient_id)
 
@@ -92,40 +110,51 @@ def _commit_patient(db: Session) -> None:
         raise HTTPException(status_code=400, detail="Patient phone or email already exists")
 
 
-@router.get("/", response_model=list[PatientResponse])
+@router.get("", response_model=list[PatientResponse])
 def get_all_patients(
     skip: int = Query(default=0, ge=0),
     limit: int = Query(default=10, ge=1, le=100),
     db: Session = Depends(get_db),
+    clinic_id: int = Depends(get_current_clinic),
     current_user: User = Depends(get_current_user),
 ):
-    return db.query(Patient).order_by(Patient.id).offset(skip).limit(limit).all()
+    patients = (
+        db.query(Patient)
+        .filter(Patient.clinic_id == clinic_id, Patient.is_deleted == False)
+        .order_by(Patient.id)
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
+    return [decrypt_patient(p) for p in patients]
 
 
-@router.post("/", response_model=PatientResponse)
+@router.post("", response_model=PatientResponse)
 def create_patient(
     patient: PatientCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    clinic_id: int = Depends(get_current_clinic),
+    current_user: User = Depends(require_role(["admin", "doctor", "receptionist"])),
 ):
-    payload = _create_payload(patient)
-    _raise_if_patient_conflict(db, payload)
+    payload = encrypt_payload(_create_payload(patient))
+    _raise_if_patient_conflict(db, payload, clinic_id)
 
-    new_patient = Patient(**payload)
+    new_patient = Patient(**payload, clinic_id=clinic_id)
     db.add(new_patient)
     _commit_patient(db)
     db.refresh(new_patient)
     _sync_patient_search(new_patient)
-    return new_patient
+    return decrypt_patient(new_patient)
 
 
 @router.get("/{patient_id}", response_model=PatientResponse)
 def get_patient(
     patient_id: int,
     db: Session = Depends(get_db),
+    clinic_id: int = Depends(get_current_clinic),
     current_user: User = Depends(get_current_user),
 ):
-    return _get_patient_or_404(db, patient_id)
+    return decrypt_patient(_get_patient_or_404(db, patient_id, clinic_id))
 
 
 @router.put("/{patient_id}", response_model=PatientResponse)
@@ -133,31 +162,33 @@ def update_patient(
     patient_id: int,
     patient: PatientUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    clinic_id: int = Depends(get_current_clinic),
+    current_user: User = Depends(require_role(["admin", "doctor", "receptionist"])),
 ):
-    existing = _get_patient_or_404(db, patient_id)
-    payload = _update_payload(patient)
+    existing = _get_patient_or_404(db, patient_id, clinic_id)
+    payload = encrypt_payload(_update_payload(patient))
     if not payload:
         raise HTTPException(status_code=400, detail="No patient fields provided")
 
-    _raise_if_patient_conflict(db, payload, patient_id=patient_id)
+    _raise_if_patient_conflict(db, payload, clinic_id, patient_id=patient_id)
     for key, value in payload.items():
         setattr(existing, key, value)
 
     _commit_patient(db)
     db.refresh(existing)
     _sync_patient_search(existing)
-    return existing
+    return decrypt_patient(existing)
 
 
 @router.delete("/{patient_id}", response_model=PatientDeleteResponse)
 def delete_patient(
     patient_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    clinic_id: int = Depends(get_current_clinic),
+    current_user: User = Depends(require_role(["admin"])),
 ):
-    existing = _get_patient_or_404(db, patient_id)
-    db.delete(existing)
+    existing = _get_patient_or_404(db, patient_id, clinic_id)
+    existing.is_deleted = True
     _commit_patient(db)
     _delete_patient_search(patient_id)
     return {"message": "Patient deleted successfully"}

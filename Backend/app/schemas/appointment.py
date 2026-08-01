@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 from typing import Optional
 from datetime import datetime
 
@@ -7,6 +7,7 @@ class AppointmentCreate(BaseModel):
     doctor_name: str
     appointment_date: datetime
     reason: Optional[str] = None
+    duration_minutes: int = Field(default=30, ge=5, le=480)
 
 class AppointmentResponse(BaseModel):
     id: int
@@ -15,7 +16,7 @@ class AppointmentResponse(BaseModel):
     appointment_date: datetime
     reason: Optional[str]
     status: str
+    duration_minutes: int
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

@@ -136,6 +136,12 @@ ENV/
 env.bak/
 venv.bak/
 
+# Local tooling + generated data
+.claude-flow/
+.claude/settings.local.json
+chroma_db/
+server.log
+
 # Spyder project settings
 .spyderproject
 .spyproject

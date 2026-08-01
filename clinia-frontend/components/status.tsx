@@ -1,0 +1,2 @@
+export function ErrorNotice({ message }: { message: string }) { return <div role="alert" className="rounded-xl border border-[color:var(--danger)]/30 bg-[color:var(--danger)]/10 px-4 py-3 text-sm text-[var(--danger)]">{message}</div>; }
+export function LoadingCard({ label = "Loading…" }: { label?: string }) { return <div className="glass animate-pulse rounded-[var(--radius)] p-8 text-sm text-[var(--text-secondary)]">{label}</div>; }
